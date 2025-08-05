@@ -1,27 +1,23 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Identity;
 using System.Text;
-using System.Security.Claims;
-using System.IdentityModel.Tokens.Jwt;
 using TodoApp.Data;
 using TodoApp.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Connect to PostgreSQL
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-
+// 1️⃣ PostgreSQL connection
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Register password hashed
-builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
+// 2️⃣ Controllers & Swagger
+builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Add JWT Auth
+// 3️⃣ Authentication (JWT)
 var jwtSettings = builder.Configuration.GetSection("Jwt");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -38,99 +34,24 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
+builder.Services.AddScoped<IPasswordHasher<TodoApp.Models.User>, PasswordHasher<TodoApp.Models.User>>();
 
-builder.Services.AddAuthorization(); 
+
+builder.Services.AddAuthorization();
+
+
+
 
 var app = builder.Build();
 
+// 4️⃣ Middleware pipeline
 app.UseSwagger();
 app.UseSwaggerUI();
 
-// Signup Endpoint
-app.MapPost("/signup", async (
-    UserSignupDto signupDto,
-    AppDbContext db,
-    IPasswordHasher<User> passwordHasher) =>
-{
-    // Check if email already exists
-    var existingUser = await db.Users.FirstOrDefaultAsync(u => u.Email == signupDto.Email);
-    if (existingUser != null)
-    {
-        return Results.BadRequest(new { message = "Email already in use." });
-    }
-
-    // Create new user
-    var user = new User
-    {
-        Email = signupDto.Email
-    };
-
-    // Hash the password before saving
-    user.PasswordHash = passwordHasher.HashPassword(user, signupDto.Password);
-
-    db.Users.Add(user);
-    await db.SaveChangesAsync();
-
-    return Results.Created($"/users/{user.Id}", new
-    {
-        message = "User created successfully",
-        user = new { user.Id, user.Email }
-    });
-});
-
-
-// login endpoint
-app.MapPost("/login", async (
-    UserLoginDto loginDto,
-    AppDbContext db,
-    IPasswordHasher<User> passwordHasher,
-    IConfiguration config) =>
-{
-    var user = await db.Users.FirstOrDefaultAsync(u => u.Email == loginDto.Email);
-    if (user == null)
-    {
-        return Results.BadRequest(new { message = "Invalid credentials" });
-    }
-
-    var result = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, loginDto.Password);
-    if (result == PasswordVerificationResult.Failed)
-    {
-        return Results.BadRequest(new { message = "Invalid credentials" });
-    }
-
-    // Generate JWT
-    var jwtSettings = config.GetSection("Jwt");
-    var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Key"]));
-    var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-    var claims = new[]
-    {
-        new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-        new Claim(ClaimTypes.Email, user.Email)
-    };
-
-    var token = new JwtSecurityToken(
-        issuer: jwtSettings["Issuer"],
-        audience: jwtSettings["Audience"],
-        claims: claims,
-        expires: DateTime.UtcNow.AddMinutes(Convert.ToDouble(jwtSettings["ExpiresInMinutes"])),
-        signingCredentials: creds
-    );
-
-    var jwt = new JwtSecurityTokenHandler().WriteToken(token);
-
-    return Results.Ok(new
-    {
-        message = "Login successful",
-        token
-    });
-});
-
-
-
-// middleware calls 
 app.UseAuthentication();
 app.UseAuthorization();
 
+// 5️⃣ Route to controllers
+app.MapControllers();
 
 app.Run();
