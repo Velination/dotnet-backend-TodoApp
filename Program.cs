@@ -8,17 +8,29 @@ using TodoApp.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1️⃣ PostgreSQL connection
+// Add CORS policy
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins("http://localhost:3000") 
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
+//  PostgreSQL connection
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// 2️⃣ Controllers & Swagger
+//  Controllers & Swagger
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// 3️⃣ Authentication (JWT)
+//  Authentication (JWT)
 var jwtSettings = builder.Configuration.GetSection("Jwt");
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -30,9 +42,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             ValidIssuer = jwtSettings["Issuer"],
             ValidAudience = jwtSettings["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Key"]))
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(jwtSettings["Key"] ?? throw new InvalidOperationException("JWT Key not configured"))
+            )
         };
     });
+
 
 builder.Services.AddScoped<IPasswordHasher<TodoApp.Models.User>, PasswordHasher<TodoApp.Models.User>>();
 
@@ -44,14 +59,18 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-// 4️⃣ Middleware pipeline
+
+// Use the CORS policy
+app.UseCors("AllowFrontend");
+
+//  Middleware pipeline
 app.UseSwagger();
 app.UseSwaggerUI();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-// 5️⃣ Route to controllers
+//  Route to controllers
 app.MapControllers();
 
 app.Run();

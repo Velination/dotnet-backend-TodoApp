@@ -25,6 +25,13 @@ namespace TodoApp.Controllers
             _config = config;
         }
 
+
+       [HttpGet("protected-route")]
+         public IActionResult ProtectedRoute()
+        {
+            return Ok(new { message = "You are authorized!" });
+         }
+
         [HttpPost("signup")]
         public async Task<IActionResult> Signup([FromBody] UserSignupDto signupDto)
         {
@@ -34,8 +41,12 @@ namespace TodoApp.Controllers
                 return BadRequest(new { message = "Email already in use." });
             }
 
-            var user = new User { Email = signupDto.Email };
-            user.PasswordHash = _passwordHasher.HashPassword(user, signupDto.Password);
+              var user = new User
+               {
+                  Email = signupDto.Email,
+                  FullName = signupDto.FullName, 
+                  PasswordHash = _passwordHasher.HashPassword(null!, signupDto.Password)
+                };
 
             _db.Users.Add(user);
             await _db.SaveChangesAsync();
@@ -43,7 +54,7 @@ namespace TodoApp.Controllers
             return Created($"/users/{user.Id}", new
             {
                 message = "User created successfully",
-                user = new { user.Id, user.Email }
+                user = new { user.Id, user.Email, user.FullName }
             });
         }
 
@@ -63,7 +74,8 @@ namespace TodoApp.Controllers
             }
 
             var jwtSettings = _config.GetSection("Jwt");
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Key"]));
+           var key = new SymmetricSecurityKey( Encoding.UTF8.GetBytes(_config["Jwt:Key"] 
+            ?? throw new InvalidOperationException("JWT Key not configured")));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var claims = new[]
@@ -79,6 +91,8 @@ namespace TodoApp.Controllers
                 expires: DateTime.UtcNow.AddMinutes(Convert.ToDouble(jwtSettings["ExpiresInMinutes"])),
                 signingCredentials: creds
             );
+
+            
 
             return Ok(new
             {
