@@ -11,7 +11,7 @@ using TodoApp.Models;
 namespace TodoApp.Controllers
 {
     [ApiController]
-   [Route("api/[controller]")]
+    [Route("api/[controller]")]
     public class AuthController : ControllerBase
     {
         private readonly AppDbContext _db;
@@ -25,12 +25,11 @@ namespace TodoApp.Controllers
             _config = config;
         }
 
-
-       [HttpGet("protected-route")]
-         public IActionResult ProtectedRoute()
+        [HttpGet("protected-route")]
+        public IActionResult ProtectedRoute()
         {
             return Ok(new { message = "You are authorized!" });
-         }
+        }
 
         [HttpPost("signup")]
         public async Task<IActionResult> Signup([FromBody] UserSignupDto signupDto)
@@ -41,12 +40,12 @@ namespace TodoApp.Controllers
                 return BadRequest(new { message = "Email already in use." });
             }
 
-              var user = new User
-               {
-                  Email = signupDto.Email,
-                  FullName = signupDto.FullName, 
-                  PasswordHash = _passwordHasher.HashPassword(null!, signupDto.Password)
-                };
+            var user = new User
+            {
+                Email = signupDto.Email,
+                FullName = signupDto.FullName,
+                PasswordHash = _passwordHasher.HashPassword(null!, signupDto.Password)
+            };
 
             _db.Users.Add(user);
             await _db.SaveChangesAsync();
@@ -74,8 +73,7 @@ namespace TodoApp.Controllers
             }
 
             var jwtSettings = _config.GetSection("Jwt");
-           var key = new SymmetricSecurityKey( Encoding.UTF8.GetBytes(_config["Jwt:Key"] 
-            ?? throw new InvalidOperationException("JWT Key not configured")));
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Key"]!));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var claims = new[]
@@ -88,16 +86,30 @@ namespace TodoApp.Controllers
                 issuer: jwtSettings["Issuer"],
                 audience: jwtSettings["Audience"],
                 claims: claims,
-                expires: DateTime.UtcNow.AddMinutes(Convert.ToDouble(jwtSettings["ExpiresInMinutes"])),
+                expires: DateTime.UtcNow.AddMinutes(Convert.ToDouble(jwtSettings["ExpireMinutes"])),
                 signingCredentials: creds
             );
-
-            
 
             return Ok(new
             {
                 message = "Login successful",
                 token = new JwtSecurityTokenHandler().WriteToken(token)
+            });
+        }
+
+        // ✅ MOVE THIS METHOD INSIDE THE CLASS
+        [HttpGet("me")]
+        public IActionResult GetCurrentUser()
+        {
+            var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+
+            var user = _db.Users.FirstOrDefault(u => u.Id == userId);
+            if (user == null) return NotFound("User not found");
+
+            return Ok(new
+            {
+                name = user.FullName,
+                email = user.Email
             });
         }
     }
