@@ -59,6 +59,19 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+// ✅ Global exception handler — ensures errors are always JSON
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        context.Response.StatusCode = 500;
+        context.Response.ContentType = "application/json";
+
+        var error = new { message = "An unexpected error occurred" };
+        await context.Response.WriteAsJsonAsync(error);
+    });
+});
+
 
 // Use the CORS policy
 app.UseCors("AllowFrontend");
