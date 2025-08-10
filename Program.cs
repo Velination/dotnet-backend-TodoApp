@@ -11,9 +11,9 @@ var builder = WebApplication.CreateBuilder(args);
 // Add CORS policy
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowFrontend", policy =>
+    options.AddPolicy("AllowVercel", policy =>
     {
-        policy.WithOrigins("http://localhost:3000") 
+        policy.WithOrigins("https://dotnet-frontend-todo-app.vercel.app") 
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
@@ -74,7 +74,7 @@ app.UseExceptionHandler(errorApp =>
 
 
 // Use the CORS policy
-app.UseCors("AllowFrontend");
+app.UseCors("AllowVercel");
 
 //  Middleware pipeline
 app.UseSwagger();
